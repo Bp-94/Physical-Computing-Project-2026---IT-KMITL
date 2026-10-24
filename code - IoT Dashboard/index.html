@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    
+    <!-- weather -->
+
+    <section class="weather">
+        <div class="weatherAndConnecting">
+            <div class="weather_title_container">
+                <span>WEATHER</span>
+            </div>
+            <div class="connecting">
+                <p id="conStatus">Status : </p>
+                <p id="connecting_text">-</p>
+            </div>
+        </div>
+        <div class="weather_container">
+            <img id="weather-icon" src="cloud.webp">
+            <div class="weather_text">
+                <p id="weather-status" style="color: white;">Loading...</p>
+            </div>
+        </div>
+    </section>
+
+    <section class="statusAndOnOff">
+        <div class="statusAndOnOff_container">
+            <p id="openStatus">status here</p>
+            <label class="onOff">
+                <input type="checkbox" id="status-toggle">
+                <span class="slider"></span>
+            </label>
+        </div>
+    </section>
+
+
+    <script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
+    <script src="js.js"></script>
+</body>
+</html>
