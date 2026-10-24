@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Website</title>
+    <link rel="stylesheet" href="style.css">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;600&family=Sarabun:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+    <section class="title">
+        <div class="smart-roof">
+            <p>SMART ROOF</p>
+        </div>
+    </section>
+
+    <!-- Abstract -->
+    <section class="abstract-section">
+        <div class="abstract-title-container">
+            <span class="text-span">ABSTRACT</span>
+        </div>
+
+        <div class="abstract-content-container">
+            <p style="text-indent: 2em; font-family: Sarabun, sans-serif;">
+                ในยุคปัจจุบันที่สภาพอากาศแปรปรวนและไม่สามารถคาดเดาได้ ทำให้การทำกิจวัตรประจำวันวันนั้นลำบากไปด้วย ซึ่งการเก็บเสื้อผ้าไม่ทันเพราะฝนตกผิดฤดูนั้น ก็เกิดจากสภาพอากาศแปรปรวนเช่นกัน
+            </p>
+            <p style="text-indent: 2em; font-family: Sarabun, sans-serif;">
+                ผู้พัฒนาจึงได้คิดค้นหลังคาอัจฉริยะ (smart roof) ขึ้นมาเพื่อลดปัญหาในการเก็บเสื้อผ้าไม่ทัน โดยออกแบบให้หลังคาสามารถเปิดและปิดอัตโนมัติได้ ซึ่งตรวจจับจากน้ำฝนที่ตกลงมาบนอุปกรณ์ที่ชื่อว่า rain sensor และยังมีระบบเปิดและปิดหลังคาที่ผู้ใช้สามารถควบคุมเองได้ ในกรณีที่ผู้ใช้นั้นนำหลังคาอัจฉริยะ (smart roof) ไปประกอบกับอุตหาหกรรมอย่างอื่น เช่น แปลงผัก เป็นต้น           
+            </p>
+        </div>
+    </section>
+
+    <hr>
+
+    <!-- Tools -->
+    <section class="content-section">
+        <div class="content-title-container">
+            <span class="text-span-tool">TOOLS</span>
+        </div>
+
+        <div class="tools-grid">
+            <div class="tool">
+                <img src="arduino.webp" alt="Arduino Uno R4 WiFi board">
+                <p id="tools-explanation">Arduino Uno R4 WiFi</p>
+            </div>
+            <div class="tool">
+                <img src="servo.webp" alt="Servo motor">
+                <p id="tools-explanation">Servo motor</p>
+            </div>
+            <div class="tool">
+                <img src="rainsensor.webp" alt="Rain sensor">
+                <p id="tools-explanation">Rain sensor</p>
+            </div>
+            <div class="tool">
+                <img src="breadboard.webp" alt="Breadboard">
+                <p id="tools-explanation">Breadboard</p>
+            </div>
+        </div>
+    </section>
+
+    <hr>
+
+    <!-- source code -->
+    <section id="sorce-code-section">
+        <div class="content-title-container">
+            <span class="text-span-source">SOURCE CODE - ARDUINO</span>
+        </div>
+
+        <div class="code-box">
+<pre><code>
+    #include &lt;WiFiS3.h&gt;
+    #include &lt;MQTT.h&gt;
+    #include &lt;Servo.h&gt;
+    
+    // การตั้งค่า Wi-Fi และ MQTT 
+    const char  WIFI_SSID[] = ".. ... .. .. .";
+    const char  WIFI_PASSWORD[] = "0981039972";
+    const char  MQTT_BROKER_ADRRESS[] = "mqtt-dashboard.com";
+    const int   MQTT_PORT = 1883; 
+    const char  MQTT_CLIENT_ID[] = "arduino101Dalmatians"; 
+    const char  SUBSCRIBE_TOPIC[] = "projectPhyCom4Kon";
+    
+    // กำหนด PIN
+    const int SERVO_PIN = 6;
+    const int RAIN_PIN  = 7;
+    
+    // กำหนดองศาเปิด/ปืดหลังคา
+    const int ANGLE_OPEN  = 90;
+    const int ANGLE_CLOSE = 0;
+    
+    WiFiClient net;
+    MQTTClient mqtt(256);
+    Servo roofServo;
+    
+    bool commandOpen = false; //เป็นตัวแปรใช้เช็ค เพราะถ้าสั่งเปิดแล้ว หลังคาจะไม่ปิดจนกว่าจะสั่งปิด
+    bool commandClose = false; //ใช้ในกรณีที่สั่งปิดขณะฝนตก
+    String lastCommand = "";
+    
+    int currentAngle = ANGLE_CLOSE;
+    
+    String weatherStatus = "";
+    int dryCount = 0; //ใช้เช็คว่าฝนหยุดตกแล้วจริงมั้ย
+    const int COUNT_TO_DRY = 100; //loop() วนทุก ~50 ms -> 100 รอบประมาณ 5 วิ
+    String weatherLastSent = "";
+    
+    void connectToWiFi(){
+      Serial.print("Connecting to Wi-Fi");
+      while (WiFi.begin(WIFI_SSID, WIFI_PASSWORD) != WL_CONNECTED){
+        Serial.print(".");
+        delay(1000);
+      }
+      Serial.println("\nConnected to Wi-Fi!");
+    }
+    
+    void connectToMQTT() {
+      Serial.print("Connecting to MQTT broker");
+      while (!mqtt.connect(MQTT_CLIENT_ID, "", "")){
+        Serial.print(".");
+        delay(1000);
+      }
+      Serial.println("\nConnected to MQTT!");
+      mqtt.subscribe(SUBSCRIBE_TOPIC);
+    }
+    
+    void setAngle(int angle){
+      roofServo.write(angle);
+      currentAngle = angle;
+      Serial.print("Servo Angle = ");
+      Serial.println(currentAngle);
+      if (currentAngle == ANGLE_OPEN){
+        mqtt.publish(SUBSCRIBE_TOPIC, "ON");
+      } else if (currentAngle == ANGLE_CLOSE){
+        mqtt.publish(SUBSCRIBE_TOPIC, "OFF");
+      }
+    }
+    
+    void messageReceived(String &topic, String &payload){
+      payload.trim();
+      lastCommand = payload;
+    
+      if (payload == "STATUS") {
+        if (currentAngle == ANGLE_OPEN) {
+          mqtt.publish(SUBSCRIBE_TOPIC, "ON");
+        } else if (currentAngle == ANGLE_CLOSE) {
+          mqtt.publish(SUBSCRIBE_TOPIC, "OFF");
+        }
+        mqtt.publish(SUBSCRIBE_TOPIC, weatherStatus);
+        weatherLastSent = weatherStatus;
+        return;
+      }
+  
+      int angle = payload.toInt();
+      if (angle == 0 && payload != "0"){ //เช็คว่าไม่ใช่ตัวอักษร เพราะ ตัวอักษร.toInt() ได้ 0
+        return;
+      }
+      if (angle &lt; ANGLE_CLOSE || angle &gt; ANGLE_OPEN){
+        Serial.println("ANGLE OUT OF RANGE!");
+        return;
+      }
+      if (angle == ANGLE_OPEN){
+        commandOpen = true;
+        commandClose = false;
+      } else {
+        commandOpen = false;
+        if (weatherStatus == "RAIN"){
+          commandClose = true;
+        }
+      }
+      setAngle(angle);
+    }
+    
+    void checkRainOpenRoof(){
+      if (digitalRead(RAIN_PIN) == LOW){ //กรณีฝนตก
+        weatherStatus = "RAIN";
+        dryCount = 0;
+        if (currentAngle != ANGLE_OPEN && !commandClose){
+          setAngle(ANGLE_OPEN);
+        }
+      } else if (weatherStatus == "RAIN"){ //กรณีฝนหยุดตก
+          dryCount++;
+          if (dryCount &gt;= COUNT_TO_DRY){
+            weatherStatus = "DRY";
+            dryCount = 0;
+            commandClose = false;
+            if (currentAngle != ANGLE_CLOSE && !commandOpen){
+              setAngle(ANGLE_CLOSE);
+            }
+          }
+      }
+      if (weatherStatus != weatherLastSent){
+        if (mqtt.publish(SUBSCRIBE_TOPIC, weatherStatus)){
+          weatherLastSent = weatherStatus;
+        }
+      }
+    }
+    
+    void setup(){
+      Serial.begin(115200);
+      pinMode(RAIN_PIN, INPUT);
+    
+      roofServo.attach(SERVO_PIN);
+      roofServo.write(ANGLE_CLOSE);
+      currentAngle = ANGLE_CLOSE;
+    
+      if (digitalRead(RAIN_PIN) == LOW){
+        weatherStatus = "RAIN";
+      } else {
+        weatherStatus = "DRY";
+      }
+  
+      connectToWiFi();
+      mqtt.begin(MQTT_BROKER_ADRRESS, MQTT_PORT, net);
+      mqtt.onMessage(messageReceived);
+      mqtt.setTimeout(2000);
+      connectToMQTT();
+  
+      mqtt.publish(SUBSCRIBE_TOPIC, "OFF");
+    }
+    
+    void loop(){
+      checkRainOpenRoof();
+      mqtt.loop();
+      delay(50);
+    }
+    </code>
+    </pre>
+        </div>
+
+    <hr>
+
+    <div class="content-title-container">
+            <span class="text-span-html">SOURCE CODE - WEBSITE (HTML)</span>
+        </div>
+
+        <div class="code-box">
+<pre>
+<code>
+    &lt;!DOCTYPE html&gt;
+    &lt;html lang="en"&gt;
+    &lt;head&gt;
+        &lt;meta charset="UTF-8"&gt;
+        &lt;meta name="viewport" content="width=device-width, initial-scale=1.0"&gt;
+        &lt;title&gt;Document&lt;/title&gt;
+        &lt;link rel="stylesheet" href="style.css"&gt;
+    &lt;/head&gt;
+    &lt;body&gt;
+
+        &lt;!-- weather --&gt;
+
+        &lt;section class="weather"&gt;
+            &lt;div class="weatherAndConnecting"&gt;
+                &lt;div class="weather_title_container"&gt;
+                    &lt;span&gt;WEATHER&lt;/span&gt;
+                &lt;/div&gt;
+                &lt;div class="connecting"&gt;
+                    &lt;p id="conStatus"&gt;Status : &lt;/p&gt;
+                    &lt;p id="connecting_text"&gt;-&lt;/p&gt;
+                &lt;/div&gt;
+            &lt;/div&gt;
+            &lt;div class="weather_container"&gt;
+                &lt;img id="weather-icon" src="cloud.webp"&gt;
+                &lt;div class="weather_text"&gt;
+                    &lt;p id="weather-status" style="color: white;"&gt;Loading...&lt;/p&gt;
+                &lt;/div&gt;
+            &lt;/div&gt;
+        &lt;/section&gt;
+
+        &lt;section class="statusAndOnOff"&gt;
+            &lt;div class="statusAndOnOff_container"&gt;
+                &lt;p id="openStatus"&gt;status here&lt;/p&gt;
+                &lt;label class="onOff"&gt;
+                    &lt;input type="checkbox" id="status-toggle"&gt;
+                    &lt;span class="slider"&gt;&lt;/span&gt;
+                &lt;/label&gt;
+            &lt;/div&gt;
+        &lt;/section&gt;
+
+        &lt;script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"&gt;&lt;/script&gt;
+        &lt;script src="js.js"&gt;&lt;/script&gt;
+    &lt;/body&gt;
+    &lt;/html&gt;
+</code>
+</pre>
+
+</div>
+
+    <hr>
+
+        <div class="content-title-container">
+            <span class="text-span-css">SOURCE CODE - WEBSITE (CSS)</span>
+        </div>
+
+        <div class="code-box">
+            <pre><code>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+    }
+
+    body {
+        background-color: #111;
+        font-family: 'Gill Sans', 'Gill Sans MT', Calibri, 'Trebuchet MS', sans-serif;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        min-height: 100dvh;
+    }
+
+    *, *::before, *::after {
+        box-sizing: border-box;       
+    }
+
+    .weather {
+        gap: 20px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        padding: 10px 20px 30px;
+        width: 100%;
+    }
+
+    .weatherAndConnecting {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;             
+        gap: 10px;
+        width: 100%;                 
+        max-width: 450px;            
+    }
+
+    .weather_title_container {
+        color: pink;
+        width: auto;                 
+        padding: 0;
+        margin: 0;
+    }
+
+    .connecting {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 10px;
+        width: auto;                 
+        margin: 0;                   
+    }
+
+    .connecting p {
+        margin: 0;                   
+        white-space: nowrap;         
+    }
+
+    #connecting_text { color: #f7f9f7; }
+    #conStatus       { color: #fcfcfc; }
+
+    .weather_text {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto;
+        font-size: larger;
+    }
+
+    #weather-icon {
+        display: none;
+        width: 50%;
+        min-width: 50px;
+        height: auto;
+        -webkit-mask-image: linear-gradient(to bottom, black 70%, transparent 100%),
+                            linear-gradient(to right, black 70%, transparent 100%), 
+                            linear-gradient(to left, black 70%, transparent 100%);
+      mask-image: linear-gradient(to bottom, black 70%, transparent 100%),
+                  linear-gradient(to right, black 70%, transparent 100%),
+                  linear-gradient(to left, black 70%, transparent 100%);
+      -webkit-mask-composite: source-in;
+      mask-composite: intersect;
+    }
+
+    .weather_title_container span {
+        border: 1px solid palevioletred;
+        border-radius: 8px;
+        display: inline-block;
+        padding: 10px;
+    }
+
+    .weather_container {
+        border: 1px solid #333;
+        border-radius: 10px;
+        padding: 10px 20px;
+        display: flex;
+        align-items: center;
+        width: 100%;
+        max-width: 450px;
+        min-width: 200px;
+        margin: 0;
+        box-sizing: border-box;
+    }
+
+    .weather_container:hover {
+        box-shadow: 0 4px 15px rgba(233, 227, 232, 0.3);
+        transition: 0.2s;
+        transform: translateY(-3px);
+    }
+
+    .statusAndOnOff {
+        display: flex;
+        margin-top: -10px;
+        justify-content: center;
+        margin: 0 20px;
+    }
+
+    .statusAndOnOff_container {
+        border: 1px solid #333;
+        border-radius: 20px;
+        color: white;
+        display: flex;
+        flex-direction: row;
+        justify-content: space-between;
+        width: 100%;
+        max-width: 450px;
+        min-width: 200px;
+        align-items: center;
+        padding: 10px 20px;
+    }
+
+    .slider {
+      background-color: #ffffff2b;
+      border-radius: 100px;
+      padding: 1px;
+      margin: 10px;
+      cursor: pointer;
+      transition: box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1) 0s;
+      align-items: center;
+      position: relative;
+      display: block;
+      width: 51px;
+      height: 29px;
+      box-shadow: rgba(0, 0, 0, 0.62) 0px 0px 5px inset, rgba(0, 0, 0, 0.21) 0px 0px 0px 24px inset,
+            #22cc3f 0px 0px 0px 0px inset, rgba(224, 224, 224, 0.45) 0px 1px 0px 0px;
+    }
+
+    .slider::after {
+      content: "";
+      display: flex;
+      top: 2.3px;
+      left: 2px;
+      width: 26px;
+      height: 26px;
+      background-color: #e3e3e3;
+      border-radius: 200px;
+      position: absolute;
+      box-shadow: transparent 0px 0px 0px 2px, rgba(0, 0, 0, 0.3) 0px 6px 6px;
+      transition: left 300ms cubic-bezier(0.4, 0, 0.2, 1) 0s, background-color 300ms cubic-bezier(0.4, 0, 0.2, 1) 0s;
+      will-change: left, background-color;
+    }
+
+    .onOff input[type="checkbox"]:checked + .slider {
+      box-shadow: rgba(0, 0, 0, 0.62) 0px 0px 5px inset, #22cc3f 0px 0px 0px 2px inset, #22cc3f 0px 0px 0px 24px inset,
+            rgba(224, 224, 224, 0.45) 0px 1px 0px 0px;
+    }
+
+    .onOff input[type="checkbox"]:checked + .slider::after {
+      left: 24px;
+    }
+
+    .onOff input[type="checkbox"] {
+      display: none;
+    }
+    </code></pre>
+    </div>
+
+    <hr>
+
+
+    <div class="content-title-container">
+            <span class="text-span-js">SOURCE CODE - WEBSITE (JAVASCRIPT)</span>
+        </div>
+
+        <div class="code-box">
+<pre><code>
+        function updateWeatherImage(isRaining) {
+        const weatherImage = document.getElementById("weather-icon");
+        const status = document.getElementById("weather-status");
+
+        weatherImage.style.display = "none";
+        status.innerText = "Loading...";
+
+        if (isRaining === "RAIN") {
+            weatherImage.style.display = "block";
+            weatherImage.src = "raining.webp";
+            status.innerText = "Raining!";
+        } else if (isRaining === "DRY") {
+            weatherImage.style.display = "block";
+            weatherImage.src = "cloud.webp";
+            status.innerText = "Cloudy!";
+        }
+    }
+
+    updateWeatherImage("loading");
+
+    // arduino -&gt; web
+    const status1 = document.getElementById("openStatus");
+    const toggle = document.getElementById("status-toggle");
+
+
+    function updateOpenStatus(status) {
+
+        if (status === "ON") {
+            status1.innerText = "Opened";
+            toggle.checked = true;
+        } else if (status === "OFF") {
+            status1.innerText = "Closed";
+            toggle.checked = false;
+
+        } else {
+            status1.innerText = "Closed";
+            toggle.checked = false;
+        }
+    }
+
+    updateOpenStatus("loading");
+
+    // web -&gt; arduino
+    // กรณีเปิดออโต้ ท้อกเกิลต้องเขียวอัตโนมัติด้วย
+    const client = mqtt.connect("wss://broker.hivemq.com:8884/mqtt");
+
+    const TOPIC = "projectPhyCom4Kon";
+    const connectText = document.getElementById("connecting_text")
+
+    // ************************************
+    function setConnectionStatus(text, color) {
+        connectText.textContent = text;
+        connectText.style.color = color;
+    }
+
+    client.on("connect", () =&gt; {
+        console.log("MQTT connected!");
+        client.publish("STATUS");
+        setConnectionStatus("Connected", "#02e715");
+        client.subscribe(TOPIC, (err) =&gt; {
+            if (err) {
+                console.error("Subscribe ไม่สำเร็จ:", err);
+                return;
+            }
+            client.publish(TOPIC, "STATUS");
+        });
+    });
+
+    client.on("error", (err) =&gt; {
+        console.error("MQTT error! :", err);
+        setConnectionStatus("Disconnected", "#e70202");
+    });
+
+    client.on("close", () =&gt; setConnectionStatus("Disconnected", "#e70202"));
+    client.on("offline", () =&gt; setConnectionStatus("Disconnected", "#e70202"));
+
+    client.on("reconnect", () =&gt; setConnectionStatus("Reconnecting...", "#f59e0b"));
+    // ************************************
+
+    toggle.addEventListener("change", () =&gt; {
+        let msg;
+        if (toggle.checked) {
+            msg = "90";
+
+        } else {
+            msg = "0";
+        }
+
+        const options = {
+            qos: 1,
+            retain: false
+        }
+
+        client.publish(TOPIC, msg);
+
+    });
+
+    client.on("message", (topic, payload) =&gt; {
+        if (topic === TOPIC) {
+            if (payload.toString() === "ON" || payload.toString() === "OFF") {
+                updateOpenStatus(payload.toString());
+            } else if (payload.toString() === "RAIN" || payload.toString() === "DRY") {
+                updateWeatherImage(payload.toString());
+            }
+        }
+    });
+    </section>
+
+    <hr>
+
+    <section class="link-website">
+        <div class="content-title-container">
+            <span class="text-span-team">LINK TO OUR IoT Dashboard</span>
+        </div>
+        <div class="abstract-content-container" style="display: flex; justify-content: center;">
+            <a href="https://uuxianzi.github.io/Phycom2026/" class="link-a" target="_blank" title="click me!">https://uuxianzi.github.io/Phycom2026/</a>
+        </div>
+    </section>
+
+    <hr>
+
+    <div class="content-title-container">
+        <span class="text-span-team">MEMBERS</span>
+    </div>
+
+    <section class="team-section">
+        <div class="team-grid">
+
+            <!-- สมาชิกคนที่ 1 -->
+            <div class="team-card">
+                <img src="donut.jpg" class="team-img">
+                <h3 class="team-name">Kanyanat Raksamai (68070216)</h3>
+            </div>
+
+            <!-- สมาชิกคนที่ 2 -->
+            <div class="team-card">
+                <img src="grace.jpg" class="team-img">
+                <h3 class="team-name">Chutikarn Sonjai (68070240)</h3>
+            </div>
+
+            <!-- สมาชิกคนที่ 3 -->
+            <div class="team-card">
+                <img src="chompoo.jpg" class="team-img">
+                <h3 class="team-name">Naphaksorn Tontan (68070274)</h3>
+            </div>
+
+            <!-- สมาชิกคนที่ 4 -->
+            <div class="team-card">
+                <img src="beam.jpg" class="team-img">
+                <h3 class="team-name">Panithi Pornsiricharoenpan (68070282)</h3>
+            </div>
+
+        </div>
+    </section>
+
+
+
+
+    <script src="script.js"></script>
+</body>
+</html>
