@@ -36,8 +36,8 @@
 - นายปณิธิ พรศิริเจริญพันธ์ 68070282
 
 # Link
-- IoT Dashboard (website ที่ใช้ควบคุมการเปิดปิดแบบระยะไกล)
+- IoT Dashboard (website ที่ใช้ควบคุมการเปิดปิดแบบระยะไกล) : 
 https://uuxianzi.github.io/Phycom2026/
 
-- Project's website
+- Project's website : 
 https://uuxianzi.github.io/PhyCom-Project-Abstract-and-Details/
