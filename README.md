@@ -40,4 +40,4 @@
   https://uuxianzi.github.io/Phycom2026/
 
 - Project's website
-  
+  https://uuxianzi.github.io/PhyCom-Project-Abstract-and-Details/
